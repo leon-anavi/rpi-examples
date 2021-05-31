@@ -1,5 +1,8 @@
 # rpi-examples
-Raspberry Pi examples
+
+This repository provides various examples for using peripheral devices such as sensors, buzzers, relays and add-on boards on Raspberry Pi single board computers written in popular programming languages C, C++, Python, etc. All examples are available under MIT license.
+
+These examples are appropriate for beginners. Hopefully, they will encourage more developers to join the Raspberry Pi community and to help them get started easily with various peripheral devices for both professional and hobby and DIY projects.
 
 # Videos
 
