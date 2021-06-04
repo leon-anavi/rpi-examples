@@ -1,31 +1,65 @@
-#!/usr/bin/python
-     
+#!/usr/bin/python3
+
+# Tested on Raspberry Pi OS. Requirements: enable SPI, for example
+# from raspi-config. The example is based on a SparkFun tutorial:
+# https://learn.sparkfun.com/tutorials/python-programming-tutorial-getting-started-with-the-raspberry-pi/experiment-3-spi-and-analog-input
+
+import signal
+import sys
+import time
 import spidev
-DEBUG = 0
-     
-spi = spidev.SpiDev()
-spi.open(0,0)
-    
-# read SPI data from MCP3002 chip
+import RPi.GPIO as GPIO
+
+spi_ch = 0
+
+# Enable SPI
+spi = spidev.SpiDev(0, spi_ch)
+spi.max_speed_hz = 1200000
+
+def close(signal, frame):
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, close)
+
 def get_adc(channel):
-	# Only 2 channels 0 and 1 else return -1
-	if ((channel > 1) or (channel < 0)):
-		return -1
-	  
-	# Send start bit, sgl/diff, odd/sign, MSBF
-	# channel = 0 sends 0000 0001 1000 0000 0000 0000
-	# channel = 1 sends 0000 0001 1100 0000 0000 0000
-	# sgl/diff = 1; odd/sign = channel; MSBF = 0
-	r = spi.xfer2([1,(2+channel)<<6,0])
-	
-	# spi.xfer2 returns same number of 8 bit bytes
-	# as sent. In this case, 3 - 8 bit bytes are returned
-	# We must then parse out the correct 10 bit byte from
-	# the 24 bits returned. The following line discards
-	# all bits but the 10 data bits from the center of
-	# the last 2 bytes: XXXX XXXX - XXXX DDDD - DDDD DDXX
-	ret = ((r[1]&31) << 6) + (r[2] >> 2)
-	return ret     
-     
-print get_adc(0)
-print get_adc(1)
+
+    # Make sure ADC channel is 0 or 1
+    if channel != 0:
+        channel = 1
+
+    # Construct SPI message
+    #  First bit (Start): Logic high (1)
+    #  Second bit (SGL/DIFF): 1 to select single mode
+    #  Third bit (ODD/SIGN): Select channel (0 or 1)
+    #  Fourth bit (MSFB): 0 for LSB first
+    #  Next 12 bits: 0 (don't care)
+    msg = 0b11
+    msg = ((msg << 1) + channel) << 5
+    msg = [msg, 0b00000000]
+    reply = spi.xfer2(msg)
+
+    # Construct single integer out of the reply (2 bytes)
+    adc = 0
+    for n in reply:
+        adc = (adc << 8) + n
+
+    # Last bit (0) is not part of ADC value, shift to remove it
+    adc = adc >> 1
+
+    # Calculate voltage form ADC value
+    # considering the soil moisture sensor is working at 5V
+    voltage = (5 * adc) / 1024
+
+    return voltage
+
+if __name__ == '__main__':
+    # Report the channel 0 and channel 1 voltages to the terminal
+    try:
+        while True:
+            adc_0 = get_adc(0)
+            adc_1 = get_adc(1)
+            print("ADC Channel 0:", round(adc_0, 2), "V ADC Channel 1:", round(adc_1, 2), "V")
+            time.sleep(0.2)
+
+    except KeyboardInterrupt:
+        GPIO.cleanup()
